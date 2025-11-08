@@ -40,8 +40,8 @@ pip install arr-suite-mcp
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/arr-suite-mcp.git
-cd arr-suite-mcp
+git clone https://github.com/shaktech786/arr-suite-mcp-server.git
+cd arr-suite-mcp-server
 pip install -e .
 ```
 
@@ -436,9 +436,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 📖 [Documentation](https://github.com/yourusername/arr-suite-mcp)
-- 🐛 [Issue Tracker](https://github.com/yourusername/arr-suite-mcp/issues)
-- 💬 [Discussions](https://github.com/yourusername/arr-suite-mcp/discussions)
+- 📖 [Documentation](https://github.com/shaktech786/arr-suite-mcp-server)
+- 🐛 [Issue Tracker](https://github.com/shaktech786/arr-suite-mcp-server/issues)
+- 💬 [Discussions](https://github.com/shaktech786/arr-suite-mcp-server/discussions)
 
 ## Roadmap
 

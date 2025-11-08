@@ -21,8 +21,8 @@ pip install arr-suite-mcp
 
 ### Via source
 ```bash
-git clone https://github.com/yourusername/arr-suite-mcp.git
-cd arr-suite-mcp
+git clone https://github.com/shaktech786/arr-suite-mcp-server.git
+cd arr-suite-mcp-server
 pip install -e .
 ```
 
@@ -142,10 +142,10 @@ See CONTRIBUTORS.md
 
 ## Links
 
-- Repository: https://github.com/yourusername/arr-suite-mcp
+- Repository: https://github.com/shaktech786/arr-suite-mcp-server
 - PyPI: https://pypi.org/project/arr-suite-mcp
-- Documentation: https://github.com/yourusername/arr-suite-mcp#readme
-- Issues: https://github.com/yourusername/arr-suite-mcp/issues
+- Documentation: https://github.com/shaktech786/arr-suite-mcp-server#readme
+- Issues: https://github.com/shaktech786/arr-suite-mcp-server/issues
 
 ## Quality Metrics
 
