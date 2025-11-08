@@ -6,7 +6,7 @@ This document contains information for submitting this package to the official M
 
 **Name:** arr-suite-mcp
 
-**Description:** Comprehensive MCP server providing AI assistants with intelligent access to the complete arr suite media automation stack (Sonarr, Radarr, Prowlarr, Bazarr, Overseerr).
+**Description:** MCP Server for Plex + the *arr suite of media server tools (Sonarr, Radarr, Prowlarr, Bazarr, Overseerr).
 
 **Category:** Media & Entertainment
 

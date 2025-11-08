@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "arr-suite-mcp"
 version = "1.0.0"
-description = "Comprehensive MCP server for the arr suite (Sonarr, Radarr, Prowlarr, Bazarr, Overseerr)"
+description = "MCP Server for Plex + the *arr suite of media server tools"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
