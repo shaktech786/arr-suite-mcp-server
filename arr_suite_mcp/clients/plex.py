@@ -493,11 +493,8 @@ class PlexClient:
             collection_key: Collection rating key
             rating_keys: List of media rating keys to remove
         """
-        uri = await self._build_item_uri(rating_keys)
-        await self.delete(
-            f"library/collections/{collection_key}/items",
-            params={"uri": uri}
-        )
+        for key in rating_keys:
+            await self.delete(f"library/collections/{collection_key}/items/{key}")
 
     async def delete_collection(self, collection_key: str) -> None:
         """Delete a collection entirely."""
