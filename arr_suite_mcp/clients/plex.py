@@ -459,7 +459,7 @@ class PlexClient:
             "sectionId": str(section_id),
             "uri": uri,
         }
-        response = await self.post("library/collections", params=params)
+        response = await self._request("POST", "library/collections", params=params)
         containers = response.get("MediaContainer", {}).get("Metadata", [{}]) if response else [{}]
         return containers[0] if containers else {}
 
