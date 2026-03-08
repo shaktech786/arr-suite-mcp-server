@@ -29,6 +29,20 @@ class PlexClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.client = httpx.AsyncClient(timeout=timeout)
+        self._machine_identifier: Optional[str] = None
+
+    async def _get_machine_identifier(self) -> str:
+        """Fetch and cache the server machine identifier."""
+        if self._machine_identifier is None:
+            response = await self.get("identity")
+            self._machine_identifier = response.get("MediaContainer", {}).get("machineIdentifier", "")
+        return self._machine_identifier
+
+    async def _build_item_uri(self, rating_keys: list[str]) -> str:
+        """Build a Plex server URI for a list of rating keys."""
+        machine_id = await self._get_machine_identifier()
+        keys = ",".join(rating_keys)
+        return f"server://{machine_id}/com.plexapp.plugins.library/library/metadata/{keys}"
 
     @property
     def service_name(self) -> str:
@@ -411,36 +425,80 @@ class PlexClient:
 
     # Collections
     async def get_collections(self, section_id: int) -> list[dict[str, Any]]:
-        """Get collections in a library."""
-        response = await self.get(f"library/sections/{section_id}/collections")
+        """Get all collections in a library section."""
+        response = await self.get(
+            f"library/sections/{section_id}/all",
+            params={"type": "18"}  # type 18 = collection
+        )
+        return response.get("MediaContainer", {}).get("Metadata", [])
+
+    async def get_collection_items(self, collection_key: str) -> list[dict[str, Any]]:
+        """Get all items in a collection."""
+        response = await self.get(f"library/collections/{collection_key}/children")
         return response.get("MediaContainer", {}).get("Metadata", [])
 
     async def create_collection(
         self,
         section_id: int,
         title: str,
-        items: list[str]
+        rating_keys: list[str]
     ) -> dict[str, Any]:
         """
-        Create a new collection.
+        Create a new collection with items.
 
         Args:
             section_id: Library section ID
             title: Collection title
-            items: List of rating keys
+            rating_keys: List of media rating keys to include
         """
+        uri = await self._build_item_uri(rating_keys)
         params = {
             "type": "1",
             "title": title,
             "smart": "0",
-            "sectionId": section_id,
-            "uri": f"server://{{machineIdentifier}}/com.plexapp.plugins.library/library/metadata/{','.join(items)}"
+            "sectionId": str(section_id),
+            "uri": uri,
         }
-        return await self.post("library/collections", params=params)
+        response = await self._request("POST", "library/collections", params=params)
+        containers = response.get("MediaContainer", {}).get("Metadata", [{}]) if response else [{}]
+        return containers[0] if containers else {}
 
-    async def add_to_collection(self, collection_key: str, rating_key: str) -> None:
-        """Add an item to a collection."""
-        await self.put(f"library/collections/{collection_key}/items", params={"uri": f"server://{{machineIdentifier}}/com.plexapp.plugins.library/library/metadata/{rating_key}"})
+    async def add_to_collection(
+        self,
+        collection_key: str,
+        rating_keys: list[str]
+    ) -> None:
+        """
+        Add items to an existing collection.
+
+        Args:
+            collection_key: Collection rating key
+            rating_keys: List of media rating keys to add
+        """
+        uri = await self._build_item_uri(rating_keys)
+        await self.put(
+            f"library/collections/{collection_key}/items",
+            params={"uri": uri}
+        )
+
+    async def remove_from_collection(
+        self,
+        collection_key: str,
+        rating_keys: list[str]
+    ) -> None:
+        """
+        Remove items from a collection.
+
+        Args:
+            collection_key: Collection rating key
+            rating_keys: List of media rating keys to remove
+        """
+        for key in rating_keys:
+            await self.delete(f"library/collections/{collection_key}/items/{key}")
+
+    async def delete_collection(self, collection_key: str) -> None:
+        """Delete a collection entirely."""
+        await self.delete(f"library/collections/{collection_key}")
 
     # Webhooks
     async def test_webhook(self, url: str) -> dict[str, Any]:

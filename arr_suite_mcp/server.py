@@ -636,6 +636,88 @@ class ArrSuiteMCPServer:
                     "required": ["rating_key"]
                 }
             ),
+            Tool(
+                name="plex_list_collections",
+                description="List all collections in a Plex library",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "section_id": {"type": "integer", "description": "Library section ID (e.g. 4 for Movies)"}
+                    },
+                    "required": ["section_id"]
+                }
+            ),
+            Tool(
+                name="plex_get_collection_items",
+                description="Get all items in a Plex collection",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "collection_key": {"type": "string", "description": "Collection rating key"}
+                    },
+                    "required": ["collection_key"]
+                }
+            ),
+            Tool(
+                name="plex_create_collection",
+                description="Create a new Plex collection with specified items",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "section_id": {"type": "integer", "description": "Library section ID"},
+                        "title": {"type": "string", "description": "Collection title"},
+                        "rating_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of media rating keys to include"
+                        }
+                    },
+                    "required": ["section_id", "title", "rating_keys"]
+                }
+            ),
+            Tool(
+                name="plex_add_to_collection",
+                description="Add items to an existing Plex collection",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "collection_key": {"type": "string", "description": "Collection rating key"},
+                        "rating_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of media rating keys to add"
+                        }
+                    },
+                    "required": ["collection_key", "rating_keys"]
+                }
+            ),
+            Tool(
+                name="plex_remove_from_collection",
+                description="Remove items from a Plex collection",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "collection_key": {"type": "string", "description": "Collection rating key"},
+                        "rating_keys": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of media rating keys to remove"
+                        }
+                    },
+                    "required": ["collection_key", "rating_keys"]
+                }
+            ),
+            Tool(
+                name="plex_delete_collection",
+                description="Delete a Plex collection entirely",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "collection_key": {"type": "string", "description": "Collection rating key"}
+                    },
+                    "required": ["collection_key"]
+                }
+            ),
         ]
 
     async def _handle_plex_tool(self, name: str, arguments: dict) -> Any:
@@ -656,6 +738,31 @@ class ArrSuiteMCPServer:
             return await client.scan_library(arguments["section_id"])
         elif name == "plex_mark_watched":
             return await client.mark_watched(arguments["rating_key"])
+        elif name == "plex_list_collections":
+            return await client.get_collections(arguments["section_id"])
+        elif name == "plex_get_collection_items":
+            return await client.get_collection_items(arguments["collection_key"])
+        elif name == "plex_create_collection":
+            return await client.create_collection(
+                arguments["section_id"],
+                arguments["title"],
+                arguments["rating_keys"]
+            )
+        elif name == "plex_add_to_collection":
+            await client.add_to_collection(
+                arguments["collection_key"],
+                arguments["rating_keys"]
+            )
+            return {"message": f"Added {len(arguments['rating_keys'])} items to collection"}
+        elif name == "plex_remove_from_collection":
+            await client.remove_from_collection(
+                arguments["collection_key"],
+                arguments["rating_keys"]
+            )
+            return {"message": f"Removed {len(arguments['rating_keys'])} items from collection"}
+        elif name == "plex_delete_collection":
+            await client.delete_collection(arguments["collection_key"])
+            return {"message": f"Collection {arguments['collection_key']} deleted"}
 
     async def run(self) -> None:
         """Run the MCP server."""
