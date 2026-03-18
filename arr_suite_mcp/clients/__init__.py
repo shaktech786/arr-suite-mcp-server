@@ -13,6 +13,7 @@ from .prowlarr import ProwlarrClient
 from .bazarr import BazarrClient
 from .overseerr import OverseerrClient
 from .plex import PlexClient
+from .jackett import JackettClient
 
 __all__ = [
     "BaseArrClient",
@@ -26,4 +27,5 @@ __all__ = [
     "BazarrClient",
     "OverseerrClient",
     "PlexClient",
+    "JackettClient",
 ]
