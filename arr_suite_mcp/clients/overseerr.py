@@ -292,6 +292,17 @@ class OverseerrClient(BaseArrClient):
         await self.delete(f"settings/sonarr/{server_id}")
 
     # System
+    async def get_system_status(self) -> dict[str, Any]:
+        """Get Overseerr system status.
+
+        Overrides BaseArrClient.get_system_status() because Overseerr
+        exposes status at /api/v1/status, not /api/v1/system/status.
+        Without this override, MCP tools that call
+        client.get_system_status() (e.g. arr_get_system_status) return
+        Overseerr as offline even when the server is healthy.
+        """
+        return await self.get("status")
+
     async def get_status(self) -> dict[str, Any]:
         """Get Overseerr system status."""
         return await self.get("status")

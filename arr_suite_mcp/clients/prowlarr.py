@@ -7,6 +7,11 @@ from .base import BaseArrClient
 class ProwlarrClient(BaseArrClient):
     """Client for interacting with Prowlarr API."""
 
+    def __init__(self, base_url: str, api_key: str, timeout: int = 30, max_retries: int = 3):
+        """Initialize Prowlarr client (uses v1 API)."""
+        super().__init__(base_url, api_key, timeout, max_retries)
+        self._api_version = "v1"  # Prowlarr uses v1, not v3
+
     @property
     def service_name(self) -> str:
         return "Prowlarr"
