@@ -456,3 +456,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 **Made with ❤️ for the media automation community**
+
+Built by [Shakeel Bhamani](https://shak-tech.com) at [ShakTech Labs](https://shak-tech.com), a product engineering studio.
