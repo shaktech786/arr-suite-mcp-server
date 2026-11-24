@@ -196,12 +196,14 @@ Each service has dedicated tools for precise control:
 - `sonarr_search_series` - Search for TV series
 - `sonarr_add_series` - Add a new series
 - `sonarr_get_series` - Get all or specific series
+- `sonarr_get_calendar` - Get upcoming episodes within a date range
 - And 20+ more operations
 
 #### Radarr Tools
 - `radarr_search_movie` - Search for movies
 - `radarr_add_movie` - Add a new movie
 - `radarr_get_movies` - Get all or specific movies
+- `radarr_get_calendar` - Get upcoming movie releases within a date range
 - And 20+ more operations
 
 #### Prowlarr Tools

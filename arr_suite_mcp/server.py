@@ -4,7 +4,7 @@ import logging
 import asyncio
 from typing import Any, Optional
 from mcp.server import Server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, TextContent
 
 from .config import ArrSuiteConfig
 from .clients import (
@@ -14,9 +14,10 @@ from .clients import (
     BazarrClient,
     OverseerrClient,
     PlexClient,
-    ArrClientError
+    JackettClient,
+    ArrClientError,
 )
-from .routers import IntentRouter, ArrIntent
+from .routers import IntentRouter
 from .routers.intent_router import ArrService, OperationType
 
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +40,9 @@ class ArrSuiteMCPServer:
         # Register MCP handlers
         self._register_handlers()
 
-        logger.info(f"Arr Suite MCP Server initialized with services: {self.config.enabled_services}")
+        logger.info(
+            f"Arr Suite MCP Server initialized with services: {self.config.enabled_services}"
+        )
 
     def _initialize_clients(self) -> None:
         """Initialize API clients for enabled services."""
@@ -48,7 +51,7 @@ class ArrSuiteMCPServer:
                 base_url=self.config.sonarr.base_url,
                 api_key=self.config.sonarr.api_key,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
             )
 
         if self.config.radarr and self.config.radarr.api_key:
@@ -56,7 +59,7 @@ class ArrSuiteMCPServer:
                 base_url=self.config.radarr.base_url,
                 api_key=self.config.radarr.api_key,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
             )
 
         if self.config.prowlarr and self.config.prowlarr.api_key:
@@ -64,7 +67,7 @@ class ArrSuiteMCPServer:
                 base_url=self.config.prowlarr.base_url,
                 api_key=self.config.prowlarr.api_key,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
             )
 
         if self.config.bazarr and self.config.bazarr.api_key:
@@ -72,7 +75,7 @@ class ArrSuiteMCPServer:
                 base_url=self.config.bazarr.base_url,
                 api_key=self.config.bazarr.api_key,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
             )
 
         if self.config.overseerr and self.config.overseerr.api_key:
@@ -80,7 +83,7 @@ class ArrSuiteMCPServer:
                 base_url=self.config.overseerr.base_url,
                 api_key=self.config.overseerr.api_key,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
             )
 
         if self.config.plex and self.config.plex.token:
@@ -88,7 +91,15 @@ class ArrSuiteMCPServer:
                 base_url=self.config.plex.base_url,
                 token=self.config.plex.token,
                 timeout=self.config.request_timeout,
-                max_retries=self.config.max_retries
+                max_retries=self.config.max_retries,
+            )
+
+        if self.config.jackett and self.config.jackett.api_key:
+            self.clients["jackett"] = JackettClient(
+                base_url=self.config.jackett.base_url,
+                api_key=self.config.jackett.api_key,
+                timeout=self.config.request_timeout,
+                max_retries=self.config.max_retries,
             )
 
     def _register_handlers(self) -> None:
@@ -113,11 +124,11 @@ class ArrSuiteMCPServer:
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Natural language query describing what you want to do"
+                                "description": "Natural language query describing what you want to do",
                             }
                         },
-                        "required": ["query"]
-                    }
+                        "required": ["query"],
+                    },
                 ),
                 Tool(
                     name="arr_explain_intent",
@@ -131,27 +142,21 @@ class ArrSuiteMCPServer:
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Natural language query to explain"
+                                "description": "Natural language query to explain",
                             }
                         },
-                        "required": ["query"]
-                    }
+                        "required": ["query"],
+                    },
                 ),
                 Tool(
                     name="arr_list_services",
                     description="List all configured and available arr services",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {}
-                    }
+                    inputSchema={"type": "object", "properties": {}},
                 ),
                 Tool(
                     name="arr_get_system_status",
                     description="Get system status for all configured arr services",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {}
-                    }
+                    inputSchema={"type": "object", "properties": {}},
                 ),
             ]
 
@@ -168,6 +173,8 @@ class ArrSuiteMCPServer:
                 tools.extend(self._get_overseerr_tools())
             if "plex" in self.clients:
                 tools.extend(self._get_plex_tools())
+            if "jackett" in self.clients:
+                tools.extend(self._get_jackett_tools())
 
             return tools
 
@@ -197,6 +204,8 @@ class ArrSuiteMCPServer:
                     result = await self._handle_overseerr_tool(name, arguments)
                 elif name.startswith("plex_"):
                     result = await self._handle_plex_tool(name, arguments)
+                elif name.startswith("jackett_"):
+                    result = await self._handle_jackett_tool(name, arguments)
                 else:
                     result = {"error": f"Unknown tool: {name}"}
 
@@ -204,10 +213,7 @@ class ArrSuiteMCPServer:
 
             except Exception as e:
                 logger.error(f"Error handling tool {name}: {e}", exc_info=True)
-                return [TextContent(
-                    type="text",
-                    text=f"Error: {str(e)}"
-                )]
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
 
     def _get_sonarr_tools(self) -> list[Tool]:
         """Get Sonarr-specific tools."""
@@ -217,11 +223,9 @@ class ArrSuiteMCPServer:
                 description="Search for TV series in Sonarr",
                 inputSchema={
                     "type": "object",
-                    "properties": {
-                        "term": {"type": "string", "description": "Search term"}
-                    },
-                    "required": ["term"]
-                }
+                    "properties": {"term": {"type": "string", "description": "Search term"}},
+                    "required": ["term"],
+                },
             ),
             Tool(
                 name="sonarr_add_series",
@@ -230,12 +234,19 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "tvdb_id": {"type": "integer", "description": "TVDB ID"},
-                        "quality_profile_id": {"type": "integer", "description": "Quality profile ID"},
+                        "quality_profile_id": {
+                            "type": "integer",
+                            "description": "Quality profile ID",
+                        },
                         "root_folder_path": {"type": "string", "description": "Root folder path"},
-                        "monitored": {"type": "boolean", "description": "Monitor series", "default": True}
+                        "monitored": {
+                            "type": "boolean",
+                            "description": "Monitor series",
+                            "default": True,
+                        },
                     },
-                    "required": ["tvdb_id", "quality_profile_id", "root_folder_path"]
-                }
+                    "required": ["tvdb_id", "quality_profile_id", "root_folder_path"],
+                },
             ),
             Tool(
                 name="sonarr_get_series",
@@ -244,8 +255,25 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "series_id": {"type": "integer", "description": "Optional series ID"}
-                    }
-                }
+                    },
+                },
+            ),
+            Tool(
+                name="sonarr_get_calendar",
+                description="Get upcoming episodes airing within a date range",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Start date in YYYY-MM-DD format (defaults to today)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "End date in YYYY-MM-DD format (defaults to 7 days from start)",
+                        },
+                    },
+                },
             ),
         ]
 
@@ -257,11 +285,9 @@ class ArrSuiteMCPServer:
                 description="Search for movies in Radarr",
                 inputSchema={
                     "type": "object",
-                    "properties": {
-                        "term": {"type": "string", "description": "Search term"}
-                    },
-                    "required": ["term"]
-                }
+                    "properties": {"term": {"type": "string", "description": "Search term"}},
+                    "required": ["term"],
+                },
             ),
             Tool(
                 name="radarr_add_movie",
@@ -270,12 +296,19 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "tmdb_id": {"type": "integer", "description": "TMDB ID"},
-                        "quality_profile_id": {"type": "integer", "description": "Quality profile ID"},
+                        "quality_profile_id": {
+                            "type": "integer",
+                            "description": "Quality profile ID",
+                        },
                         "root_folder_path": {"type": "string", "description": "Root folder path"},
-                        "monitored": {"type": "boolean", "description": "Monitor movie", "default": True}
+                        "monitored": {
+                            "type": "boolean",
+                            "description": "Monitor movie",
+                            "default": True,
+                        },
                     },
-                    "required": ["tmdb_id", "quality_profile_id", "root_folder_path"]
-                }
+                    "required": ["tmdb_id", "quality_profile_id", "root_folder_path"],
+                },
             ),
             Tool(
                 name="radarr_get_movies",
@@ -284,8 +317,25 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "movie_id": {"type": "integer", "description": "Optional movie ID"}
-                    }
-                }
+                    },
+                },
+            ),
+            Tool(
+                name="radarr_get_calendar",
+                description="Get upcoming movie releases within a date range",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "start": {
+                            "type": "string",
+                            "description": "Start date in YYYY-MM-DD format (defaults to today)",
+                        },
+                        "end": {
+                            "type": "string",
+                            "description": "End date in YYYY-MM-DD format (defaults to 7 days from start)",
+                        },
+                    },
+                },
             ),
         ]
 
@@ -299,20 +349,24 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search query"},
-                        "type": {"type": "string", "description": "Search type (search, tvsearch, movie)", "default": "search"}
+                        "type": {
+                            "type": "string",
+                            "description": "Search type (search, tvsearch, movie)",
+                            "default": "search",
+                        },
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             ),
             Tool(
                 name="prowlarr_get_indexers",
                 description="Get all configured indexers",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             ),
             Tool(
                 name="prowlarr_sync_apps",
                 description="Sync indexers to all connected applications",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             ),
         ]
 
@@ -327,10 +381,10 @@ class ArrSuiteMCPServer:
                     "properties": {
                         "media_type": {"type": "string", "description": "movie or series"},
                         "media_id": {"type": "integer", "description": "Media ID"},
-                        "episode_id": {"type": "integer", "description": "Episode ID (for series)"}
+                        "episode_id": {"type": "integer", "description": "Episode ID (for series)"},
                     },
-                    "required": ["media_type", "media_id"]
-                }
+                    "required": ["media_type", "media_id"],
+                },
             ),
             Tool(
                 name="bazarr_download_subtitle",
@@ -340,10 +394,10 @@ class ArrSuiteMCPServer:
                     "properties": {
                         "media_type": {"type": "string", "description": "movie or episode"},
                         "media_id": {"type": "integer"},
-                        "language": {"type": "string", "description": "Language code (e.g., 'en')"}
+                        "language": {"type": "string", "description": "Language code (e.g., 'en')"},
                     },
-                    "required": ["media_type", "media_id", "language"]
-                }
+                    "required": ["media_type", "media_id", "language"],
+                },
             ),
         ]
 
@@ -355,11 +409,9 @@ class ArrSuiteMCPServer:
                 description="Search for movies and TV shows",
                 inputSchema={
                     "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Search query"}
-                    },
-                    "required": ["query"]
-                }
+                    "properties": {"query": {"type": "string", "description": "Search query"}},
+                    "required": ["query"],
+                },
             ),
             Tool(
                 name="overseerr_request",
@@ -369,10 +421,10 @@ class ArrSuiteMCPServer:
                     "properties": {
                         "media_type": {"type": "string", "description": "movie or tv"},
                         "media_id": {"type": "integer", "description": "TMDB/TVDB ID"},
-                        "is_4k": {"type": "boolean", "default": False}
+                        "is_4k": {"type": "boolean", "default": False},
                     },
-                    "required": ["media_type", "media_id"]
-                }
+                    "required": ["media_type", "media_id"],
+                },
             ),
             Tool(
                 name="overseerr_get_requests",
@@ -380,9 +432,12 @@ class ArrSuiteMCPServer:
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "filter": {"type": "string", "description": "Filter (pending, approved, available)"}
-                    }
-                }
+                        "filter": {
+                            "type": "string",
+                            "description": "Filter (pending, approved, available)",
+                        }
+                    },
+                },
             ),
         ]
 
@@ -395,7 +450,7 @@ class ArrSuiteMCPServer:
         if service.value not in self.clients:
             return {
                 "error": f"{service.value.capitalize()} is not configured",
-                "available_services": list(self.clients.keys())
+                "available_services": list(self.clients.keys()),
             }
 
         client = self.clients[service.value]
@@ -403,24 +458,12 @@ class ArrSuiteMCPServer:
         # Execute operation based on service and operation type
         try:
             result = await self._execute_operation(client, service, operation, context)
-            return {
-                "service": service.value,
-                "operation": operation.value,
-                "result": result
-            }
+            return {"service": service.value, "operation": operation.value, "result": result}
         except ArrClientError as e:
-            return {
-                "error": str(e),
-                "service": service.value,
-                "operation": operation.value
-            }
+            return {"error": str(e), "service": service.value, "operation": operation.value}
 
     async def _execute_operation(
-        self,
-        client: Any,
-        service: ArrService,
-        operation: OperationType,
-        context: dict
+        self, client: Any, service: ArrService, operation: OperationType, context: dict
     ) -> Any:
         """Execute the appropriate operation on the client."""
         # This is a simplified implementation - you would expand this
@@ -477,15 +520,24 @@ class ArrSuiteMCPServer:
 
     def _handle_list_services(self) -> dict[str, Any]:
         """List all configured services."""
+        # Derive service names from the config model fields rather than a hardcoded list
+        service_names = [
+            name for name in self.config.model_fields
+            if name not in {"request_timeout", "max_retries", "log_level"}
+        ]
         return {
             "enabled_services": self.config.enabled_services,
             "services": {
                 name: {
                     "configured": name in self.clients,
-                    "url": getattr(self.config, name).base_url if hasattr(self.config, name) and getattr(self.config, name) else None
+                    "url": (
+                        getattr(self.config, name).base_url
+                        if hasattr(self.config, name) and getattr(self.config, name)
+                        else None
+                    ),
                 }
-                for name in ["sonarr", "radarr", "prowlarr", "bazarr", "overseerr"]
-            }
+                for name in service_names
+            },
         }
 
     async def _handle_system_status(self) -> dict[str, Any]:
@@ -494,15 +546,9 @@ class ArrSuiteMCPServer:
         for name, client in self.clients.items():
             try:
                 status = await client.get_system_status()
-                statuses[name] = {
-                    "online": True,
-                    "status": status
-                }
+                statuses[name] = {"online": True, "status": status}
             except Exception as e:
-                statuses[name] = {
-                    "online": False,
-                    "error": str(e)
-                }
+                statuses[name] = {"online": False, "error": str(e)}
         return statuses
 
     async def _handle_sonarr_tool(self, name: str, arguments: dict) -> Any:
@@ -517,6 +563,8 @@ class ArrSuiteMCPServer:
             if "series_id" in arguments:
                 return await client.get_series(arguments["series_id"])
             return await client.get_all_series()
+        elif name == "sonarr_get_calendar":
+            return await client.get_calendar(start=arguments.get("start"), end=arguments.get("end"))
 
     async def _handle_radarr_tool(self, name: str, arguments: dict) -> Any:
         """Handle Radarr-specific tools."""
@@ -530,6 +578,8 @@ class ArrSuiteMCPServer:
             if "movie_id" in arguments:
                 return await client.get_movie(arguments["movie_id"])
             return await client.get_all_movies()
+        elif name == "radarr_get_calendar":
+            return await client.get_calendar(start=arguments.get("start"), end=arguments.get("end"))
 
     async def _handle_prowlarr_tool(self, name: str, arguments: dict) -> Any:
         """Handle Prowlarr-specific tools."""
@@ -549,19 +599,16 @@ class ArrSuiteMCPServer:
         if name == "bazarr_search_subtitles":
             if arguments["media_type"] == "series":
                 return await client.search_series_subtitles(
-                    arguments["media_id"],
-                    arguments.get("episode_id")
+                    arguments["media_id"], arguments.get("episode_id")
                 )
             return await client.search_movie_subtitles(arguments["media_id"])
         elif name == "bazarr_download_subtitle":
             if arguments["media_type"] == "episode":
                 return await client.download_series_subtitle(
-                    arguments["media_id"],
-                    arguments["language"]
+                    arguments["media_id"], arguments["language"]
                 )
             return await client.download_movie_subtitle(
-                arguments["media_id"],
-                arguments["language"]
+                arguments["media_id"], arguments["language"]
             )
 
     async def _handle_overseerr_tool(self, name: str, arguments: dict) -> Any:
@@ -581,18 +628,16 @@ class ArrSuiteMCPServer:
             Tool(
                 name="plex_get_libraries",
                 description="Get all Plex libraries",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             ),
             Tool(
                 name="plex_search",
                 description="Search Plex for media",
                 inputSchema={
                     "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Search query"}
-                    },
-                    "required": ["query"]
-                }
+                    "properties": {"query": {"type": "string", "description": "Search query"}},
+                    "required": ["query"],
+                },
             ),
             Tool(
                 name="plex_get_recently_added",
@@ -601,18 +646,18 @@ class ArrSuiteMCPServer:
                     "type": "object",
                     "properties": {
                         "limit": {"type": "integer", "description": "Max items", "default": 50}
-                    }
-                }
+                    },
+                },
             ),
             Tool(
                 name="plex_get_on_deck",
                 description="Get On Deck (in progress) media",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             ),
             Tool(
                 name="plex_get_sessions",
                 description="Get currently playing sessions",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             ),
             Tool(
                 name="plex_scan_library",
@@ -622,8 +667,8 @@ class ArrSuiteMCPServer:
                     "properties": {
                         "section_id": {"type": "integer", "description": "Library section ID"}
                     },
-                    "required": ["section_id"]
-                }
+                    "required": ["section_id"],
+                },
             ),
             Tool(
                 name="plex_mark_watched",
@@ -633,8 +678,8 @@ class ArrSuiteMCPServer:
                     "properties": {
                         "rating_key": {"type": "string", "description": "Media rating key"}
                     },
-                    "required": ["rating_key"]
-                }
+                    "required": ["rating_key"],
+                },
             ),
             Tool(
                 name="plex_list_collections",
@@ -764,19 +809,61 @@ class ArrSuiteMCPServer:
             await client.delete_collection(arguments["collection_key"])
             return {"message": f"Collection {arguments['collection_key']} deleted"}
 
+    def _get_jackett_tools(self) -> list[Tool]:
+        """Get Jackett-specific tools."""
+        return [
+            Tool(
+                name="jackett_search",
+                description="Search for releases across all Jackett indexers",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "indexer": {
+                            "type": "string",
+                            "description": "Indexer ID to search (default: all)",
+                            "default": "all",
+                        },
+                        "categories": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Category IDs to filter results",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            ),
+            Tool(
+                name="jackett_get_indexers",
+                description="Get all configured Jackett indexers",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+        ]
+
+    async def _handle_jackett_tool(self, name: str, arguments: dict) -> Any:
+        """Handle Jackett-specific tools."""
+        client = self.clients["jackett"]
+
+        if name == "jackett_search":
+            return await client.search(
+                query=arguments["query"],
+                indexer=arguments.get("indexer", "all"),
+                categories=arguments.get("categories"),
+            )
+        elif name == "jackett_get_indexers":
+            return await client.get_all_indexers()
+
     async def run(self) -> None:
         """Run the MCP server."""
         from mcp.server.stdio import stdio_server
 
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
-                read_stream,
-                write_stream,
-                self.server.create_initialization_options()
+                read_stream, write_stream, self.server.create_initialization_options()
             )
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     import sys
 
