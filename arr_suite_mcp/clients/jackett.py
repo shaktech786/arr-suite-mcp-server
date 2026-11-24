@@ -10,6 +10,7 @@ This client uses only the results API, which is the meaningful surface for an
 MCP tool (search and indexer status). Admin operations are out of scope.
 """
 
+import re
 from typing import Any, Optional
 from .base import BaseArrClient
 
@@ -68,6 +69,8 @@ class JackettClient(BaseArrClient):
         Returns:
             Dict with "Results" (release list) and "Indexers" (per-indexer stats)
         """
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", indexer) or indexer in {".", ".."}:
+            raise ValueError(f"Invalid Jackett indexer id: {indexer!r}")
         params: dict[str, Any] = {"Query.SearchTerm": query}
         if categories:
             params["Category[]"] = categories

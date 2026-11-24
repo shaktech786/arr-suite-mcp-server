@@ -522,7 +522,7 @@ class ArrSuiteMCPServer:
         """List all configured services."""
         # Derive service names from the config model fields rather than a hardcoded list
         service_names = [
-            name for name in self.config.model_fields
+            name for name in type(self.config).model_fields
             if name not in {"request_timeout", "max_retries", "log_level"}
         ]
         return {
