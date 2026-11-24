@@ -111,3 +111,13 @@ class TestIntentRouter:
         ctx = router.parse_intent("Get Breaking Bad S05E14").context
         assert ctx.get("season") == "05" and ctx.get("episode") == "14"
         assert "season" not in router.parse_intent("Add Ocean's 11").context
+
+    def test_leading_verb_wins_operation_ties(self, router):
+        """'Approve the request for X' approves; it does not file a new request."""
+        intent = router.parse_intent("Approve the request for Dune")
+        assert intent.operation == OperationType.APPROVE
+        assert intent.context.get("title") == "Dune"
+
+    def test_questions_are_not_titles(self, router):
+        """Status questions carry no title."""
+        assert "title" not in router.parse_intent("Show me what is playing on Plex").context
