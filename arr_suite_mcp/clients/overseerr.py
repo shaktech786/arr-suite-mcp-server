@@ -1,6 +1,7 @@
 """Overseerr API client."""
 
 from typing import Any, Optional
+from urllib.parse import quote
 from .base import BaseArrClient
 
 
@@ -125,9 +126,12 @@ class OverseerrClient(BaseArrClient):
         Returns:
             Search results
         """
+        # Overseerr rejects '+' for spaces and unencoded reserved characters
+        # (HTTP 400), while httpx params encode spaces as '+'. Encode once with
+        # %20 and build the query string by hand.
         return await self.get(
-            "search",
-            params={"query": query, "page": page, "language": language}
+            f"search?query={quote(query, safe='')}&page={int(page)}"
+            f"&language={quote(language, safe='')}"
         )
 
     async def discover_movies(
