@@ -23,7 +23,7 @@ class TestIntentRouter:
 
     def test_parse_movie_search(self, router):
         """Test parsing movie search requests."""
-        intent = router.parse_intent("Search for The Matrix")
+        intent = router.parse_intent("Search for the movie The Matrix")
 
         assert intent.service == ArrService.RADARR
         assert intent.operation == OperationType.SEARCH
@@ -73,7 +73,7 @@ class TestIntentRouter:
 
     def test_route_method(self, router):
         """Test the route convenience method."""
-        service, operation, context = router.route("Add The Office")
+        service, operation, context = router.route("Add the show The Office")
 
         assert service == ArrService.SONARR
         assert operation == OperationType.ADD
@@ -86,3 +86,28 @@ class TestIntentRouter:
         assert "radarr" in explanation.lower()
         assert "search" in explanation.lower()
         assert "2023" in explanation
+
+    def test_generic_search_without_media_type_goes_to_overseerr(self, router):
+        """Without a movie/TV keyword the router can't know the type; Overseerr searches both."""
+        intent = router.parse_intent("Search for The Matrix")
+
+        assert intent.service == ArrService.OVERSEERR
+        assert intent.operation == OperationType.SEARCH
+        assert intent.context.get("title") == "The Matrix"
+
+    def test_verbs_are_not_service_keywords(self, router):
+        """'show' as a verb must not route to Sonarr, and keywords match whole words only."""
+        assert router.parse_intent("Show all indexers").service == ArrService.PROWLARR
+        assert router.parse_intent("Show me the subtitle settings").service == ArrService.BAZARR
+
+    def test_title_strips_trailing_qualifiers(self, router):
+        """Year, quality, season and destination phrases are not part of the title."""
+        assert router.parse_intent("Add The Matrix from 1999").context["title"] == "The Matrix"
+        assert router.parse_intent("Add Dune in 4K").context["title"] == "Dune"
+        assert router.parse_intent("Get Breaking Bad season 5 episode 14").context["title"] == "Breaking Bad"
+
+    def test_season_episode_shorthand(self, router):
+        """S05E14 shorthand is parsed; stray 's' + digits elsewhere is not."""
+        ctx = router.parse_intent("Get Breaking Bad S05E14").context
+        assert ctx.get("season") == "05" and ctx.get("episode") == "14"
+        assert "season" not in router.parse_intent("Add Ocean's 11").context
