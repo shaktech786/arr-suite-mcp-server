@@ -55,7 +55,7 @@ class IntentRouter:
     # Keywords that indicate specific services
     SERVICE_KEYWORDS = {
         ArrService.SONARR: [
-            "tv", "show", "series", "episode", "season", "sonarr",
+            "tv", "tv show", "the show", "a show", "shows", "series", "episode", "season", "sonarr",
             "television", "tvdb", "anime"
         ],
         ArrService.RADARR: [
@@ -139,31 +139,67 @@ class IntentRouter:
     CONTEXT_PATTERNS = {
         "title": [
             r"(?:titled?|named?|called)\s+['\"]([^'\"]+)['\"]",
-            r"['\"]([^'\"]+)['\"]",
-            r"(?:movie|show|series)\s+([A-Z][^\.,;]+)"
+            r"(?:^|\s)['\"]([^'\"]+)['\"]",
         ],
         "year": [
             r"\b(19\d{2}|20\d{2})\b"
         ],
         "season": [
-            r"season\s+(\d+)",
-            r"s(\d+)"
+            r"\bseason\s+(\d+)",
+            r"\bs(\d{1,2})e\d{1,3}\b"
         ],
         "episode": [
-            r"episode\s+(\d+)",
-            r"e(\d+)"
+            r"\bepisode\s+(\d+)",
+            r"\bs\d{1,2}e(\d{1,3})\b"
         ],
         "quality": [
-            r"(?:in\s+)?(\d+[kp]|4k|1080p|720p|sd|hd|uhd)",
+            r"\b(\d{3,4}p|[48]k|sd|hd|uhd)\b",
         ],
         "language": [
             r"(?:in\s+)?(\w+)\s+(?:language|subtitle|subs?)"
         ]
     }
 
+    # Pieces of a query that are never part of a title
+    _LEADING_VERB = re.compile(
+        r"^(?:please\s+)?(?:add|search(?:\s+for)?|find|look\s*up|download|grab|request|"
+        r"get|fetch|show(?:\s+me)?|delete|remove|monitor|unmonitor|track|play|refresh|scan|"
+        r"approve|accept|decline|reject)\s+(?:the\s+request\s+for\s+)?",
+        re.IGNORECASE,
+    )
+    _MEDIA_NOUN = re.compile(r"^(?:the\s+)?(?:movie|film|tv\s+show|show|series)\s+", re.IGNORECASE)
+    _SUBTITLE_TARGET = re.compile(r"\b(?:subtitles?|subs|captions?)\b.*?\bfor\s+(.+)$", re.IGNORECASE)
+    _TRAILING = [
+        re.compile(p, re.IGNORECASE)
+        for p in (
+            r"\s+(?:to|into|in|on)\s+(?:my|the)\s+.*$",
+            r"\s+(?:from|in)\s+(?:19|20)\d{2}\b.*$",
+            r"\s+\((?:19|20)\d{2}\).*$",
+            r"\s+in\s+(?:\d{3,4}p|[48]k|sd|hd|uhd)\b.*$",
+            r"\s+season\s+\d+.*$",
+            r"\s+episode\s+\d+.*$",
+            r"\s+s\d{1,2}e\d{1,3}\b.*$",
+        )
+    ]
+    _NOT_A_TITLE = re.compile(r"^(?:all|my|every|what|which|who|how)\b", re.IGNORECASE)
+
     def __init__(self):
         """Initialize the intent router."""
         pass
+
+    def _first_position(self, query: str, operation: OperationType) -> int:
+        """Index of the earliest keyword for an operation in the query."""
+        positions = [
+            m.start()
+            for keyword in self.OPERATION_KEYWORDS[operation]
+            if (m := re.search(rf"\b{re.escape(keyword)}s?\b", query))
+        ]
+        return min(positions, default=len(query))
+
+    @staticmethod
+    def _contains(query: str, keyword: str) -> bool:
+        """Whole-word keyword match, allowing a plural 's'."""
+        return re.search(rf"\b{re.escape(keyword)}s?\b", query) is not None
 
     def parse_intent(self, query: str) -> ArrIntent:
         """
@@ -209,7 +245,7 @@ class IntentRouter:
 
         for service, keywords in self.SERVICE_KEYWORDS.items():
             for keyword in keywords:
-                if keyword in query:
+                if self._contains(query, keyword):
                     # Longer keywords get higher weight
                     weight = len(keyword.split()) * 0.2 + 1.0
                     scores[service] += weight
@@ -237,7 +273,7 @@ class IntentRouter:
 
         for operation, keywords in self.OPERATION_KEYWORDS.items():
             for keyword in keywords:
-                if keyword in query:
+                if self._contains(query, keyword):
                     weight = len(keyword.split()) * 0.2 + 1.0
                     scores[operation] += weight
 
@@ -254,8 +290,10 @@ class IntentRouter:
             }
             return default_ops.get(service, OperationType.LIST), 0.5
 
-        max_operation = max(scores, key=scores.get)
-        max_score = scores[max_operation]
+        max_score = max(scores.values())
+        tied = [op for op, score in scores.items() if score == max_score]
+        # On a tie the operation named first in the query wins ("approve the request ...")
+        max_operation = min(tied, key=lambda op: self._first_position(query, op))
 
         confidence = min(max_score / 2.0, 1.0)
 
@@ -272,6 +310,11 @@ class IntentRouter:
                     context[key] = match.group(1)
                     break
 
+        if "title" not in context:
+            title = self._extract_title(query)
+            if title:
+                context["title"] = title
+
         # Extract boolean flags
         context["monitored"] = "unmonitor" not in query.lower()
         context["search_on_add"] = "don't search" not in query.lower()
@@ -281,6 +324,22 @@ class IntentRouter:
             context["is_4k"] = True
 
         return context
+
+    def _extract_title(self, query: str) -> Optional[str]:
+        """Best-effort title: the query minus verbs, media nouns and trailing qualifiers."""
+        text = query.strip().rstrip(".?!")
+        target = self._SUBTITLE_TARGET.search(text)
+        if target:
+            text = target.group(1)
+        else:
+            text = self._LEADING_VERB.sub("", text, count=1)
+        text = self._MEDIA_NOUN.sub("", text, count=1)
+        for pattern in self._TRAILING:
+            text = pattern.sub("", text)
+        text = text.strip()
+        if not text or self._NOT_A_TITLE.match(text):
+            return None
+        return text
 
     def route(self, query: str) -> tuple[ArrService, OperationType, dict]:
         """
